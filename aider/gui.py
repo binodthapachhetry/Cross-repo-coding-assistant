@@ -151,6 +151,8 @@ class GUI:
             st.title("Aider")
             # self.cmds_tab, self.settings_tab = st.tabs(["Commands", "Settings"])
 
+            selected_repo = st.selectbox("Active Repo", self.repo_manager.repos) 
+
             # self.do_recommended_actions()
             self.do_add_to_chat()
             self.do_recent_msgs()
@@ -163,6 +165,16 @@ class GUI:
                 " issues](https://github.com/Aider-AI/aider/issues)."
             )
 
+    def display_message(self, msg):                                                                                                          
+        if msg.get('repo'):                                                                                                                  
+            st.badge(f"Repo: {msg['repo']}")                                                                                                 
+        st.write(msg.content)                                                                                                                
+                             
+    def handle_dragdrop(self):                                                                                                               
+        if self.dragged_entity:                                                                                                              
+            target_repo = self.get_hovered_repo()                                                                                            
+            self.paste_to_repo(self.dragged_entity, target_repo) 
+                                   
     def do_settings_tab(self):
         pass
 
@@ -538,6 +550,22 @@ def gui_main():
     #    print(f"{key}: {value.value}")
 
     GUI()
+
+
+class CrossRepoGUI(GUI):                                                                                                                    
+    def render_dual_view(self):                                                                                                             
+        cols = st.columns(len(self.repos))                                                                                                  
+        for idx, repo in enumerate(self.repos):                                                                                             
+            with cols[idx]:                                                                                                                 
+                self.show_repo_context(repo)                                                                                                
+                                                                                                                                            
+    def handle_cross_repo_paste(self):                                                                                                      
+        source_code = self.clipboard.get()                                                                                                  
+        adapted_code = CrossRepoAdapter.adapt(                                                                                              
+            source_code,                                                                                                                    
+            self.current_repo.context                                                                                                       
+        )                                                                                                                                   
+        self.apply_changes(adapted_code) 
 
 
 if __name__ == "__main__":

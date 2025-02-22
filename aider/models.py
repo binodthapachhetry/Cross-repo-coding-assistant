@@ -657,6 +657,12 @@ class Model(ModelSettings):
             except AttributeError:
                 return None
 
+class CrossModel(Model):                                                                                                                    
+     context_allocations = {                                                                                                                 
+         'primary_repo': 0.6,                                                                                                                
+         'secondary_repos': 0.3,                                                                                                             
+         'cross_links': 0.1                                                                                                                  
+     }  
 
 def register_models(model_settings_fnames):
     files_loaded = []

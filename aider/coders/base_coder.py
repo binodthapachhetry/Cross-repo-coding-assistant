@@ -69,6 +69,25 @@ all_fences = [
 ]
 
 
+def enhance_prompt_with_cross_context(self):                                                                                                
+     prompt += f"""                                                                                                                          
+     ## Cross-Repo Context                                                                                                                   
+     {self.cross_repo_graph.get_relevant_links()}                                                                                            
+     """   
+
+
+class BaseCoder:                                                                                                                            
+    def __init__(self, repos: List[RepoMap]):  # Changed from single repo                                                                   
+        self.repo_maps = repos                                                                                                              
+        self.cross_context = CrossRepoContext(repos)                                                                                        
+                                                                                                                                            
+    def get_context(self):                                                                                                                  
+        # Combine contexts from multiple repos                                                                                              
+        return (                                                                                                                            
+            self._get_code_context()                                                                                                        
+            + self.cross_context.get_relations()                                                                                            
+        )  
+
 class Coder:
     abs_fnames = None
     abs_read_only_fnames = None

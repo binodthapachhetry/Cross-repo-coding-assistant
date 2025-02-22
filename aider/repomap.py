@@ -785,7 +785,31 @@ def get_supported_languages_md():
 
     return res
 
+# class MultiRepoMap(RepoMap):                                                                                                                
+#      def __init__(self, repo_roots: List[Path]):                                                                                                  
+#         self.repo_roots = repo_roots  # List of root directories                                                                            
+#         self.repo_contexts = {root: RepoMap(root) for root in repo_roots}                                                                   
+#         self.global_symbol_registry = defaultdict(list)
 
+# def build_cross_repo_graph(self):                                                                                                           
+#      # 1. Build individual repo graphs                                                                                                       
+#      repo_graphs = {root: rm.build_graph() for root, rm in self.repo_contexts.items()}                                                       
+                                                                                                                                             
+#      # 2. Find potential integration points                                                                                                  
+#      for symbol, occurrences in self.global_symbol_registry.items():                                                                         
+#          if len(occurrences) > 1:  # Symbol exists in multiple repos                                                                         
+#              for (repo1, tag1), (repo2, tag2) in combinations(occurrences, 2):                                                               
+#                  self.add_cross_repo_edge(repo1, tag1, repo2, tag2)                                                                          
+                                                                                                                                             
+def add_cross_repo_edge(self, src_repo, src_tag, dest_repo, dest_tag):                                                                      
+     # Calculate edge weight based on semantic similarity                                                                                    
+     weight = self.calculate_semantic_similarity(src_tag, dest_tag)                                                                          
+     self.global_graph.add_edge(                                                                                                             
+         f"{src_repo}::{src_tag.name}",                                                                                                      
+         f"{dest_repo}::{dest_tag.name}",                                                                                                    
+         weight=weight                                                                                                                       
+     )                                                                               
+     
 if __name__ == "__main__":
     fnames = sys.argv[1:]
 

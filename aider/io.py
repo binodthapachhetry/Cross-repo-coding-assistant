@@ -192,6 +192,15 @@ class AutoCompleter(Completer):
             yield Completion(ins, start_position=pos, display=match)
 
 
+class CrossRepoCompleter(AutoCompleter):                                                                                                    
+    def get_completions(self, document, complete_event):                                                                                    
+        # Show repo-prefixed suggestions                                                                                                    
+        return [                                                                                                                            
+            f"{repo.name}/{fname}"                                                                                                          
+            for repo in self.repos                                                                                                          
+            for fname in repo.get_files()                                                                                                   
+        ] 
+
 class InputOutput:
     num_error_outputs = 0
     num_user_asks = 0
