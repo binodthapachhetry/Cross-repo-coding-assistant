@@ -164,6 +164,11 @@ class GUI:
                 "This browser version of aider is experimental. Please share feedback in [GitHub"
                 " issues](https://github.com/Aider-AI/aider/issues)."
             )
+    def render_dual_view(self):                                                                                                                                                                                                                     
+        cols = st.columns(len(self.repos))                                                                                                  
+        for idx, repo in enumerate(self.repos):                                                                                             
+            with cols[idx]:                                                                                                                 
+                self._render_repo(repo.root, repo.get_highlighted()) 
 
     def display_message(self, msg):                                                                                                          
         if msg.get('repo'):                                                                                                                  

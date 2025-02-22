@@ -22,6 +22,7 @@ from typing import List
 from aider import __version__, models, prompts, urls, utils
 from aider.analytics import Analytics
 from aider.commands import Commands
+from aider.cross_repo import CrossRepoContext
 from aider.exceptions import LiteLLMExceptions
 from aider.history import ChatSummary
 from aider.io import ConfirmGroup, InputOutput
@@ -87,6 +88,10 @@ class BaseCoder:
             self._get_code_context()                                                                                                        
             + self.cross_context.get_relations()                                                                                            
         )  
+    
+    def _format_prompt(self):                                                                                                               
+         # Should include cross-repo context                                                                                                 
+         prompt += f"\n## Cross-Repo Relationships\n{self.cross_context.get_links()}" 
 
 class Coder:
     abs_fnames = None

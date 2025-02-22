@@ -170,6 +170,10 @@ pypandoc==1.15
     # via -r requirements/requirements.in
 pyperclip==1.9.0
     # via -r requirements/requirements.in
+
+pytest==7.4.4
+pytest-watch==4.2.0
+    # via -r requirements/requirements.in
 python-dateutil==2.9.0.post0
     # via posthog
 python-dotenv==1.0.1
