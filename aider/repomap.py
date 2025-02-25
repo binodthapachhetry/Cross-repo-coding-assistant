@@ -53,6 +53,12 @@ class RepoMap:
         map_mul_no_files=8,
         refresh="auto",
     ):
+        if not root:                                                                                                                        
+            raise ValueError("RepoMap requires explicit root directory")                                                                    
+                                                                                                                                             
+        self.root = os.path.abspath(root)                                                                                                   
+        print(f"RepoMap initialized with root: {self.root}")  # Debug 
+        
         self.io = io
         self.verbose = verbose
         self.refresh = refresh
@@ -60,6 +66,9 @@ class RepoMap:
         if not root:
             root = os.getcwd()
         self.root = root
+
+        from aider.io import InputOutput                                                                                                    
+        self.io = io or InputOutput() 
 
         self.load_tags_cache()
         self.cache_threshold = 0.95
@@ -77,11 +86,20 @@ class RepoMap:
         self.map_cache = {}
         self.map_processing_time = 0
         self.last_map = None
+        # self.G = None
+
+        self._init_dependency_graph()
 
         if self.verbose:
             self.io.tool_output(
                 f"RepoMap initialized with map_mul_no_files: {self.map_mul_no_files}"
             )
+    def _init_dependency_graph(self):                                                                                                       
+        """Ensure dependency graph exists with basic structure"""                                                                           
+        if not hasattr(self, 'G'):  
+            print("Went to create the network graph")                                                                                                        
+            import networkx as nx                                                                                                           
+            self.G = nx.MultiDiGraph()
 
     def token_count(self, text):
         len_text = len(text)
@@ -340,11 +358,91 @@ class RepoMap:
                 kind="ref",
                 line=-1,
             )
+        
+         # Generic API route detection (any framework)                                                                                           
+        route_query = language.query("""                                                                                                        
+            [                                                                                                                                   
+                ;; Python FastAPI/Flask                                                                                                         
+                (decorator                                                                                                                      
+                    (call                                                                                                                       
+                        function: (identifier) @router_identifier                                                                               
+                        arguments: (argument_list (string) @route_path)                                                                         
+                    )                                                                                                                           
+                ) @route_def                                                                                                                    
+                                                                                                                                                
+                ;; JavaScript/TypeScript Express                                                                                                
+                (call_expression                                                                                                                
+                    function: (member_expression                                                                                                
+                        object: (identifier) @router_object                                                                                     
+                        property: (identifier) @http_method)                                                                                    
+                    arguments: (arguments (string) @route_path)                                                                                 
+                ) @route_def                                                                                                                    
+            ]                                                                                                                                   
+        """)                                                                                                                                    
+                                                                                                                                                
+        # Generic API consumer detection (any HTTP client)                                                                                      
+        consumer_query = language.query("""                                                                                                     
+            [                                                                                                                                   
+                ;; JavaScript/TypeScript fetch                                                                                                  
+                (call_expression                                                                                                                
+                    function: (identifier) @http_client                                                                                         
+                    arguments: (arguments (string) @api_url)                                                                                    
+                ) @api_call                                                                                                                     
+                                                                                                                                                
+                ;; Python requests                                                                                                              
+                (call_expression                                                                                                                
+                    function: (attribute                                                                                                        
+                        object: (identifier) @http_module                                                                                       
+                        attribute: (identifier) @http_method)                                                                                   
+                    arguments: (arguments (string) @api_url)                                                                                    
+                ) @api_call                                                                                                                     
+            ]                                                                                                                                   
+        """)                                                                                                                                    
+                                                                                                                                                
+        # Process route definitions                                                                                                             
+        for node, tag in route_query.captures(tree.root_node):                                                                                  
+            if tag == "route_path":                                                                                                             
+                yield Tag(                                                                                                                      
+                    rel_fname=rel_fname,                                                                                                        
+                    fname=fname,                                                                                                                
+                    name=node.text.decode(),                                                                                                    
+                    kind="api_route",                                                                                                           
+                    line=node.start_point[0]                                                                                                    
+                )                                                                                                                               
+                                                                                                                                                
+        # Process API consumers                                                                                                                 
+        for node, tag in consumer_query.captures(tree.root_node):                                                                               
+            if tag == "api_url":                                                                                                                
+                yield Tag(                                                                                                                      
+                    rel_fname=rel_fname,                                                                                                        
+                    fname=fname,                                                                                                                
+                    name=node.text.decode(),                                                                                                    
+                    kind="api_consumer",                                                                                                        
+                    line=node.start_point[0]                                                                                                    
+                ) 
 
+    def get_local_dependencies(self):                                                                                                       
+        """Return edges from the dependency graph for this repository"""                                                                    
+        if not hasattr(self, 'G'):                                                                                                              
+            self._init_dependency_graph()  
+
+        print(f"Repo {self.root} graph edges: {len(self.G.edges())}")                                                                                                     
+        return self.G.edges(data=True)
+    
     def get_ranked_tags(
         self, chat_fnames, other_fnames, mentioned_fnames, mentioned_idents, progress=None
     ):
         import networkx as nx
+
+        if not hasattr(self, 'G'):                                                                                                              
+            import networkx as nx                                                                                                               
+            self.G = nx.MultiDiGraph() 
+        
+        # Ensure base nodes exist for all files                                                                                                 
+        all_files = set(chat_fnames).union(set(other_fnames))                                                                                   
+        for fname in all_files:                                                                                                                 
+            rel_fname = self.get_rel_fname(fname)                                                                                               
+            self.G.add_node(rel_fname, type="file")  
 
         defines = defaultdict(set)
         references = defaultdict(list)
@@ -429,7 +527,6 @@ class RepoMap:
 
         idents = set(defines.keys()).intersection(set(references.keys()))
 
-        G = nx.MultiDiGraph()
 
         for ident in idents:
             if progress:
@@ -445,14 +542,22 @@ class RepoMap:
 
             for referencer, num_refs in Counter(references[ident]).items():
                 for definer in definers:
-                    # dump(referencer, definer, num_refs, mul)
-                    # if referencer == definer:
-                    #    continue
+                    if referencer == definer:                                                                                                   
+                        continue  # Skip self-references                                                                                        
+                                                                                                                                             
+                    # Ensure nodes exist                                                                                                        
+                    self.G.add_node(referencer, type="reference")                                                                               
+                    self.G.add_node(definer, type="definition")                                                                                 
+                                                                                                                                                
+                    # Add edge with weight                                                                                                      
+                    self.G.add_edge(                                                                                                            
+                        referencer,                                                                                                             
+                        definer,                                                                                                                
+                        weight=math.sqrt(num_refs),                                                                                             
+                        ident=ident                                                                                                             
+                    )   
 
-                    # scale down so high freq (low value) mentions don't dominate
-                    num_refs = math.sqrt(num_refs)
 
-                    G.add_edge(referencer, definer, weight=mul * num_refs, ident=ident)
 
         if not references:
             pass
@@ -463,24 +568,24 @@ class RepoMap:
             pers_args = dict()
 
         try:
-            ranked = nx.pagerank(G, weight="weight", **pers_args)
+            ranked = nx.pagerank(self.G, weight="weight", **pers_args)
         except ZeroDivisionError:
             # Issue #1536
             try:
-                ranked = nx.pagerank(G, weight="weight")
+                ranked = nx.pagerank(self.G, weight="weight")
             except ZeroDivisionError:
                 return []
 
         # distribute the rank from each source node, across all of its out edges
         ranked_definitions = defaultdict(float)
-        for src in G.nodes:
+        for src in self.G.nodes:
             if progress:
                 progress()
 
             src_rank = ranked[src]
             total_weight = sum(data["weight"] for _src, _dst, data in G.out_edges(src, data=True))
             # dump(src, src_rank, total_weight)
-            for _src, dst, data in G.out_edges(src, data=True):
+            for _src, dst, data in self.G.out_edges(src, data=True):
                 data["rank"] = src_rank * data["weight"] / total_weight
                 ident = data["ident"]
                 ranked_definitions[(dst, ident)] += data["rank"]
@@ -719,6 +824,31 @@ class RepoMap:
         output = "\n".join([line[:100] for line in output.splitlines()]) + "\n"
 
         return output
+    
+    def get_all_tags(self):   
+                                                                                                                      
+        for fname in self.io.get_all_files(self.root):  # Need to implement file listing                                                    
+            rel_fname = self.get_rel_fname(fname)                                                                                           
+            yield from self.get_tags(fname, rel_fname) 
+
+    def build_dependency_graph(self):                                                                                                       
+        """Ensure dependency graph is built with basic structure"""                                                                         
+        if not hasattr(self, 'G') or len(self.G.edges()) == 0:                                                                              
+            # Build minimal graph structure                                                                                                 
+            if not hasattr(self, 'G') or len(self.G.edges()) == 0:                                                                              
+             # Provide required parameters with empty defaults                                                                               
+                all_files = list(self.io.get_all_files(self.root))
+                print(all_files)
+                self.get_ranked_tags(                                                                                                           
+                    chat_fnames=all_files,                                                                                                             
+                    other_fnames=[],                                                                      
+                    mentioned_fnames=set(),                                                                                                     
+                    mentioned_idents={"User"}                                                                                                      
+                )                                                                           
+            print(f"Built dependency graph for {self.root} with {len(self.G.edges())} edges")  # Debug
+            # print(f"Building graph for {self.root} with {len(all_files)} files")
+            # for fil in all_files:
+            #     print(fil) 
 
 
 def find_src_files(directory):
@@ -808,7 +938,8 @@ def add_cross_repo_edge(self, src_repo, src_tag, dest_repo, dest_tag):
          f"{src_repo}::{src_tag.name}",                                                                                                      
          f"{dest_repo}::{dest_tag.name}",                                                                                                    
          weight=weight                                                                                                                       
-     )                                                                               
+     )       
+                                                                        
      
 if __name__ == "__main__":
     fnames = sys.argv[1:]
@@ -826,3 +957,4 @@ if __name__ == "__main__":
 
     dump(len(repo_map))
     print(repo_map)
+

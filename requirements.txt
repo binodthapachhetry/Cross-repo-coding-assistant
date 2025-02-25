@@ -63,7 +63,7 @@ gitdb==4.0.12
     # via gitpython
 gitpython==3.1.44
     # via -r requirements/requirements.in
-grep-ast==0.6.1
+grep-ast>=0.6.1
     # via -r requirements/requirements.in
 h11==0.14.0
     # via httpcore
@@ -172,6 +172,7 @@ pyperclip==1.9.0
     # via -r requirements/requirements.in
 
 pytest==7.4.4
+pytest-cov>=4.1.0 
 pytest-watch==4.2.0
     # via -r requirements/requirements.in
 python-dateutil==2.9.0.post0
@@ -200,7 +201,7 @@ rpds-py==0.22.3
     # via
     #   jsonschema
     #   referencing
-scipy==1.13.1
+scipy==1.14.1
     # via -r requirements/requirements.in
 six==1.17.0
     # via
@@ -223,7 +224,7 @@ soupsieve==2.6
     # via beautifulsoup4
 tiktoken==0.9.0
     # via litellm
-tokenizers==0.19.1
+tokenizers==0.21.0
     # via
     #   -r requirements/requirements.in
     #   litellm
@@ -231,13 +232,6 @@ tqdm==4.67.1
     # via
     #   huggingface-hub
     #   openai
-tree-sitter==0.21.3
-    # via
-    #   -r requirements/requirements.in
-    #   grep-ast
-    #   tree-sitter-languages
-tree-sitter-languages==1.10.2
-    # via grep-ast
 typing-extensions==4.12.2
     # via
     #   anyio

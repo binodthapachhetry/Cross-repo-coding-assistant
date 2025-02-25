@@ -991,7 +991,34 @@ class InputOutput:
             console.print(Columns(files_with_label))
 
         return output.getvalue()
-
+    
+    def get_all_files(self, root):                                                                                                          
+        """List files only within the repo root"""                                                                                          
+        all_files = []                                                                                                                      
+        root = os.path.abspath(root)                                                                                                        
+                                                                                                                                            
+        for dirpath, dirnames, filenames in os.walk(root):                                                                                  
+            # Skip hidden directories by modifying dirnames in-place                                                                        
+            dirnames[:] = [d for d in dirnames if not d.startswith('.')]                                                                    
+                                                                                                                                            
+            # Filter out hidden files                                                                                                       
+            visible_files = [f for f in filenames if not f.startswith('.')]                                                                 
+                                                                                                                                            
+            # Create full paths and check directory components                                                                              
+            for fname in visible_files:                                                                                                     
+                full_path = os.path.join(dirpath, fname)                                                                                    
+                                                                                                                                            
+                # Split path into components relative to root                                                                               
+                rel_path = os.path.relpath(full_path, root)                                                                                 
+                path_components = rel_path.split(os.sep)                                                                                    
+                                                                                                                                            
+                # Skip if any directory component is hidden                                                                                 
+                if any(part.startswith('.') for part in path_components[:-1]):                                                              
+                    continue                                                                                                                
+                                                                                                                                            
+                all_files.append(full_path)                                                                                                 
+                                                                                                                                            
+        return all_files   
 
 def get_rel_fname(fname, root):
     try:

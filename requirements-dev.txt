@@ -1,0 +1,5 @@
+pytest>=7.4.4                                                                                                                               
+pytest-watch>=4.2.0                                                                                                                         
+pytest-cov>=4.1.0  
+grep-ast>=0.6.1                                                                                                                           
+networkx==3.2.1
