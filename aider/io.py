@@ -192,14 +192,67 @@ class AutoCompleter(Completer):
             yield Completion(ins, start_position=pos, display=match)
 
 
-class CrossRepoCompleter(AutoCompleter):                                                                                                    
-    def get_completions(self, document, complete_event):                                                                                    
-        # Show repo-prefixed suggestions                                                                                                    
-        return [                                                                                                                            
-            f"{repo.name}/{fname}"                                                                                                          
-            for repo in self.repos                                                                                                          
-            for fname in repo.get_files()                                                                                                   
-        ] 
+class CrossRepoCompleter(AutoCompleter):
+    """Provides completions for files across multiple repositories"""
+    
+    def __init__(
+        self, 
+        repos, 
+        root, 
+        rel_fnames, 
+        addable_rel_fnames, 
+        commands, 
+        encoding, 
+        abs_read_only_fnames=None
+    ):
+        super().__init__(
+            root, 
+            rel_fnames, 
+            addable_rel_fnames, 
+            commands, 
+            encoding, 
+            abs_read_only_fnames
+        )
+        self.repos = repos
+        
+    def get_completions(self, document, complete_event):
+        """Get completions including repo-prefixed file suggestions"""
+        # First get standard completions
+        standard_completions = list(super().get_completions(document, complete_event))
+        
+        # If we're not in a context where repo prefixes make sense, just return standard completions
+        text = document.text_before_cursor
+        if not text or not text.strip() or '/' not in text.strip():
+            return standard_completions
+        
+        # Check if we're completing a repo-prefixed path
+        words = text.split()
+        last_word = words[-1] if words else ""
+        
+        if '/' in last_word:
+            repo_prefix, file_prefix = last_word.split('/', 1)
+            
+            # Find matching repos
+            matching_repos = [repo for repo in self.repos if repo.name.startswith(repo_prefix)]
+            
+            for repo in matching_repos:
+                # Get files from this repo that match the prefix
+                repo_files = [
+                    fname for fname in repo.get_all_relative_files() 
+                    if fname.startswith(file_prefix)
+                ]
+                
+                for fname in repo_files:
+                    completion = f"{repo.name}/{fname}"
+                    yield Completion(
+                        completion, 
+                        start_position=-len(last_word),
+                        display=completion
+                    )
+        
+        # Also return standard completions
+        for completion in standard_completions:
+            yield completion
 
 class InputOutput:
     num_error_outputs = 0

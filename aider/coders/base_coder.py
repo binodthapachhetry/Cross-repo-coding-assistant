@@ -70,28 +70,78 @@ all_fences = [
 ]
 
 
-def enhance_prompt_with_cross_context(self):                                                                                                
-     prompt += f"""                                                                                                                          
-     ## Cross-Repo Context                                                                                                                   
-     {self.cross_repo_graph.get_relevant_links()}                                                                                            
-     """   
-
-
-class BaseCoder:                                                                                                                            
-    def __init__(self, repos: List[RepoMap]):  # Changed from single repo                                                                   
-        self.repo_maps = repos                                                                                                              
-        self.cross_context = CrossRepoContext(repos)                                                                                        
-                                                                                                                                            
-    def get_context(self):                                                                                                                  
-        # Combine contexts from multiple repos                                                                                              
-        return (                                                                                                                            
-            self._get_code_context()                                                                                                        
-            + self.cross_context.get_relations()                                                                                            
-        )  
+def enhance_prompt_with_cross_context(self, prompt=""):
+    """
+    Enhance a prompt with cross-repository context information
     
-    def _format_prompt(self):                                                                                                               
-         # Should include cross-repo context                                                                                                 
-         prompt += f"\n## Cross-Repo Relationships\n{self.cross_context.get_links()}" 
+    Args:
+        prompt: The original prompt to enhance
+        
+    Returns:
+        Enhanced prompt with cross-repository context
+    """
+    if not hasattr(self, 'cross_context') or not self.cross_context:
+        return prompt
+        
+    cross_repo_links = self.cross_context.get_relevant_links()
+    if cross_repo_links:
+        prompt += f"""
+## Cross-Repository Context
+{cross_repo_links}
+"""
+    return prompt
+
+
+class BaseCoder:
+    """Base class for coders that support multiple repositories"""
+    
+    def __init__(self, repos=None):
+        """
+        Initialize with multiple repository maps
+        
+        Args:
+            repos: List of RepoMap objects representing different repositories
+        """
+        from aider.cross_repo import CrossRepoContext
+        
+        self.repo_maps = repos or []
+        if self.repo_maps:
+            self.cross_context = CrossRepoContext(self.repo_maps)
+        else:
+            self.cross_context = None
+            
+    def get_context(self):
+        """
+        Get combined context from all repositories
+        
+        Returns:
+            String containing code context and cross-repository relationships
+        """
+        context = self._get_code_context() if hasattr(self, '_get_code_context') else ""
+        
+        if self.cross_context:
+            cross_repo_context = self.cross_context.get_relations()
+            if cross_repo_context:
+                context += "\n\n" + cross_repo_context
+                
+        return context
+    
+    def _format_prompt(self, prompt=""):
+        """
+        Format prompt with cross-repository context
+        
+        Args:
+            prompt: Base prompt to enhance
+            
+        Returns:
+            Enhanced prompt with cross-repository context
+        """
+        if self.cross_context:
+            cross_links = self.cross_context.get_relevant_links()
+            if cross_links:
+                prompt += f"\n\n## Cross-Repository Relationships\n{cross_links}"
+                
+        return prompt
 
 class Coder:
     abs_fnames = None
@@ -296,6 +346,7 @@ class Coder:
         main_model,
         io,
         repo=None,
+        repos=None,  # New parameter for multiple repositories
         fnames=None,
         read_only_fnames=None,
         show_diffs=False,
@@ -410,7 +461,11 @@ class Coder:
         self.commands = commands or Commands(self.io, self)
         self.commands.coder = self
 
+        # Initialize repositories
+        self.repos = []
         self.repo = repo
+        
+        # Set up primary repository
         if use_git and self.repo is None:
             try:
                 self.repo = GitRepo(
@@ -422,8 +477,16 @@ class Coder:
             except FileNotFoundError:
                 pass
 
+        # Set primary root directory
         if self.repo:
             self.root = self.repo.root
+            self.repos.append(self.repo)
+        
+        # Add additional repositories if provided
+        if repos:
+            for additional_repo in repos:
+                if additional_repo not in self.repos:
+                    self.repos.append(additional_repo)
 
         for fname in fnames:
             fname = Path(fname)

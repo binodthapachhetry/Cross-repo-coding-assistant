@@ -657,12 +657,54 @@ class Model(ModelSettings):
             except AttributeError:
                 return None
 
-class CrossModel(Model):                                                                                                                    
-     context_allocations = {                                                                                                                 
-         'primary_repo': 0.6,                                                                                                                
-         'secondary_repos': 0.3,                                                                                                             
-         'cross_links': 0.1                                                                                                                  
-     }  
+class CrossModel(Model):
+    """Model extension with specific support for cross-repository context management"""
+    
+    def __init__(self, model, weak_model=None, editor_model=None, editor_edit_format=None):
+        super().__init__(model, weak_model, editor_model, editor_edit_format)
+        self.context_allocations = {
+            'primary_repo': 0.6,
+            'secondary_repos': 0.3,
+            'cross_links': 0.1
+        }
+    
+    def allocate_tokens(self, total_tokens):
+        """
+        Allocate tokens for different parts of the cross-repository context
+        
+        Args:
+            total_tokens: Total available tokens
+            
+        Returns:
+            Dictionary with token allocations
+        """
+        return {
+            'primary_repo': int(total_tokens * self.context_allocations['primary_repo']),
+            'secondary_repos': int(total_tokens * self.context_allocations['secondary_repos']),
+            'cross_links': int(total_tokens * self.context_allocations['cross_links'])
+        }
+    
+    def adjust_allocations(self, primary=None, secondary=None, cross_links=None):
+        """
+        Adjust token allocation percentages
+        
+        Args:
+            primary: New percentage for primary repo (0.0-1.0)
+            secondary: New percentage for secondary repos (0.0-1.0)
+            cross_links: New percentage for cross-repository links (0.0-1.0)
+        """
+        if primary is not None:
+            self.context_allocations['primary_repo'] = float(primary)
+        if secondary is not None:
+            self.context_allocations['secondary_repos'] = float(secondary)
+        if cross_links is not None:
+            self.context_allocations['cross_links'] = float(cross_links)
+            
+        # Normalize to ensure they sum to 1.0
+        total = sum(self.context_allocations.values())
+        if total != 1.0:
+            for key in self.context_allocations:
+                self.context_allocations[key] /= total
 
 def register_models(model_settings_fnames):
     files_loaded = []

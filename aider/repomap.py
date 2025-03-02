@@ -52,23 +52,23 @@ class RepoMap:
         max_context_window=None,
         map_mul_no_files=8,
         refresh="auto",
+        name=None,  # Added repository name parameter
     ):
         if not root:                                                                                                                        
             raise ValueError("RepoMap requires explicit root directory")                                                                    
                                                                                                                                              
-        self.root = os.path.abspath(root)                                                                                                   
-        print(f"RepoMap initialized with root: {self.root}")  # Debug 
+        self.root = os.path.abspath(root)
+        self.name = name or os.path.basename(self.root)  # Use basename as default name
         
         self.io = io
         self.verbose = verbose
         self.refresh = refresh
 
-        if not root:
-            root = os.getcwd()
-        self.root = root
-
         from aider.io import InputOutput                                                                                                    
         self.io = io or InputOutput() 
+
+        if self.verbose:
+            self.io.tool_output(f"RepoMap initialized for {self.name} at {self.root}")
 
         self.load_tags_cache()
         self.cache_threshold = 0.95
@@ -86,7 +86,6 @@ class RepoMap:
         self.map_cache = {}
         self.map_processing_time = 0
         self.last_map = None
-        # self.G = None
 
         self._init_dependency_graph()
 
