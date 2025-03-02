@@ -583,7 +583,7 @@ class RepoMap:
                 progress()
 
             src_rank = ranked[src]
-            total_weight = sum(data["weight"] for _src, _dst, data in G.out_edges(src, data=True))
+            total_weight = sum(data["weight"] for _src, _dst, data in self.G.out_edges(src, data=True))
             # dump(src, src_rank, total_weight)
             for _src, dst, data in self.G.out_edges(src, data=True):
                 data["rank"] = src_rank * data["weight"] / total_weight
