@@ -367,8 +367,155 @@ class Commands:
         self._clear_chat_history()
         self.io.tool_output("All files dropped and chat history cleared.")
 
+    def cmd_repos(self, args):
+        "List all repositories or add a new repository"
+        if not hasattr(self.coder, 'repo_manager'):
+            self.io.tool_error("Multi-repository support is not enabled")
+            return
+            
+        if not args:
+            # List repositories
+            repos = self.coder.repo_manager.list_repositories()
+            if not repos:
+                self.io.tool_output("No repositories added. Use /add-repo <path> to add a repository.")
+                return
+                
+            self.io.tool_output("Repositories:")
+            for name, path, is_active in repos:
+                active_marker = "* " if is_active else "  "
+                self.io.tool_output(f"{active_marker}{name}: {path}")
+            return
+            
+        # Add repository with specified path
+        path = args
+        # Use basename as default name
+        name = os.path.basename(os.path.abspath(path))
+        self.coder.repo_manager.add_repository(name, path, models=self.coder.main_model.commit_message_models())
+    
+    def cmd_add_repo(self, args):
+        "Add a repository to the session"
+        if not hasattr(self.coder, 'repo_manager'):
+            self.io.tool_error("Multi-repository support is not enabled")
+            return
+            
+        if not args:
+            self.io.tool_error("Usage: /add-repo <path> [name]")
+            return
+            
+        parts = args.split(maxsplit=1)
+        path = parts[0]
+        name = parts[1] if len(parts) > 1 else os.path.basename(os.path.abspath(path))
+        
+        repo = self.coder.repo_manager.add_repository(
+            name, 
+            path, 
+            models=self.coder.main_model.commit_message_models()
+        )
+        
+        if repo:
+            # Build dependency graph for the new repository
+            self.coder.repo_manager.get_repo_map(name).build_dependency_graph()
+            
+            # Rebuild cross-repo graph
+            self.coder.repo_manager.build_cross_repo_graph()
+    
+    def cmd_switch_repo(self, args):
+        "Switch the active repository"
+        if not hasattr(self.coder, 'repo_manager'):
+            self.io.tool_error("Multi-repository support is not enabled")
+            return
+            
+        if not args:
+            self.io.tool_error("Usage: /switch-repo <repo-name>")
+            return
+            
+        if self.coder.repo_manager.set_active_repository(args):
+            # Update coder's repo reference to the active repository
+            self.coder.repo = self.coder.repo_manager.get_active_repository()
+            self.coder.root = self.coder.repo.root
+            
+            # Update repo_map reference
+            self.coder.repo_map = self.coder.repo_manager.get_active_repo_map()
+            
+            # Clear file caches
+            self.coder.abs_root_path_cache = {}
+    
+    def cmd_find_connections(self, args):
+        "Find integration points between repositories"
+        if not hasattr(self.coder, 'repo_manager'):
+            self.io.tool_error("Multi-repository support is not enabled")
+            return
+            
+        # Build/rebuild the cross-repo graph
+        self.coder.repo_manager.build_cross_repo_graph()
+        
+        # Find integration points
+        integration_points = self.coder.repo_manager.find_integration_points()
+        
+        if not integration_points:
+            self.io.tool_output("No integration points found between repositories")
+            return
+            
+        self.io.tool_output("Found integration points between repositories:")
+        
+        for point in integration_points:
+            if point["type"] == "shared_node":
+                self.io.tool_output(
+                    f"- Shared symbol '{point['name']}' found in repositories: "
+                    f"{', '.join(point['repos'])}"
+                )
+            elif point["type"] == "api_connection":
+                self.io.tool_output(
+                    f"- API route '{point['route']}' provided by {', '.join(point['provider_repos'])} "
+                    f"and consumed by {', '.join(point['consumer_repos'])}"
+                )
+    
+    def cmd_adapt_code(self, args):
+        "Adapt code from one repository to another"
+        if not hasattr(self.coder, 'repo_manager'):
+            self.io.tool_error("Multi-repository support is not enabled")
+            return
+            
+        parts = args.split(maxsplit=2)
+        if len(parts) < 3:
+            self.io.tool_error("Usage: /adapt-code <source-repo> <target-repo> <file-path>")
+            return
+            
+        source_repo, target_repo, file_path = parts
+        
+        # Verify repositories exist
+        source = self.coder.repo_manager.get_repository(source_repo)
+        target = self.coder.repo_manager.get_repository(target_repo)
+        
+        if not source or not target:
+            return
+            
+        # Verify file exists in source repo
+        source_path = os.path.join(source.root, file_path)
+        if not os.path.exists(source_path):
+            self.io.tool_error(f"File {file_path} not found in {source_repo}")
+            return
+            
+        # Read source file
+        try:
+            with open(source_path, 'r', encoding=self.io.encoding) as f:
+                source_code = f.read()
+        except Exception as e:
+            self.io.tool_error(f"Error reading source file: {str(e)}")
+            return
+            
+        # Add message to chat history
+        self.coder.cur_messages.append({
+            "role": "user",
+            "content": f"Please adapt the code from {source_repo}/{file_path} to work in the {target_repo} repository.\n\nSource code:\n```\n{source_code}\n```"
+        })
+        
+        # Let the LLM handle the adaptation in the next response
+        self.io.tool_output(f"Added request to adapt {file_path} from {source_repo} to {target_repo}")
+        
     def cmd_tokens(self, args):
         "Report on the number of tokens used by the current chat context"
+        
 
         res = []
 
