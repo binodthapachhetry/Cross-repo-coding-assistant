@@ -211,3 +211,280 @@ class CrossRepoGraph:
                             })
         
         return connections
+import itertools
+import networkx as nx
+from typing import Dict, List, Set, Tuple, Optional
+
+class CrossRepoGraph:
+    """
+    Manages a graph of relationships between multiple repositories
+    """
+    
+    def __init__(self):
+        """Initialize the cross-repository graph"""
+        self.graph = nx.MultiDiGraph()
+        self.repos = {}
+        
+    def add_repo(self, repo_name: str, repo_graph: nx.MultiDiGraph):
+        """
+        Add a repository's dependency graph to the cross-repository graph
+        
+        Args:
+            repo_name: Name of the repository
+            repo_graph: NetworkX graph of the repository's dependencies
+        """
+        self.repos[repo_name] = repo_graph
+        
+        # Add nodes with repository attribute
+        for node in repo_graph.nodes():
+            node_id = f"{repo_name}:{node}"
+            node_data = repo_graph.nodes[node].copy() if repo_graph.nodes[node] else {}
+            node_data['repo'] = repo_name
+            node_data['name'] = node
+            self.graph.add_node(node_id, **node_data)
+        
+        # Add edges with repository attribute
+        for src, dst, key, data in repo_graph.edges(data=True, keys=True):
+            src_id = f"{repo_name}:{src}"
+            dst_id = f"{repo_name}:{dst}"
+            edge_data = data.copy()
+            edge_data['repo'] = repo_name
+            self.graph.add_edge(src_id, dst_id, key=key, **edge_data)
+    
+    def update_nodes(self, repo_name: str, nodes: List[str]):
+        """
+        Update specific nodes from a repository
+        
+        Args:
+            repo_name: Name of the repository
+            nodes: List of node names to update
+        """
+        if repo_name not in self.repos:
+            return
+            
+        repo_graph = self.repos[repo_name]
+        
+        # Remove existing nodes
+        for node in nodes:
+            node_id = f"{repo_name}:{node}"
+            if node_id in self.graph:
+                self.graph.remove_node(node_id)
+        
+        # Add updated nodes
+        for node in nodes:
+            if node in repo_graph:
+                node_id = f"{repo_name}:{node}"
+                node_data = repo_graph.nodes[node].copy() if repo_graph.nodes[node] else {}
+                node_data['repo'] = repo_name
+                node_data['name'] = node
+                self.graph.add_node(node_id, **node_data)
+                
+                # Add edges
+                for src, dst, key, data in repo_graph.out_edges(node, data=True, keys=True):
+                    if dst in nodes:  # Only add edges to other updated nodes
+                        src_id = f"{repo_name}:{src}"
+                        dst_id = f"{repo_name}:{dst}"
+                        edge_data = data.copy()
+                        edge_data['repo'] = repo_name
+                        self.graph.add_edge(src_id, dst_id, key=key, **edge_data)
+    
+    def find_integration_points(self) -> List[Dict]:
+        """
+        Find potential integration points between repositories
+        
+        Returns:
+            List of dictionaries describing integration points
+        """
+        integration_points = []
+        
+        # For each pair of repositories
+        for repo1, repo2 in itertools.combinations(self.repos.keys(), 2):
+            repo1_nodes = [n for n, d in self.graph.nodes(data=True) if d.get('repo') == repo1]
+            repo2_nodes = [n for n, d in self.graph.nodes(data=True) if d.get('repo') == repo2]
+            
+            # Find shared symbols (same name in both repos)
+            shared_symbols = self._find_shared_symbols(repo1, repo2, repo1_nodes, repo2_nodes)
+            
+            # Find potential API connections
+            api_connections = self._find_api_connections(repo1, repo2, repo1_nodes, repo2_nodes)
+            
+            if shared_symbols or api_connections:
+                integration_points.append({
+                    'repos': (repo1, repo2),
+                    'shared_symbols': shared_symbols,
+                    'api_connections': api_connections
+                })
+        
+        return integration_points
+    
+    def _find_shared_symbols(self, repo1: str, repo2: str, 
+                            repo1_nodes: List[str], repo2_nodes: List[str]) -> List[Dict]:
+        """
+        Find symbols with the same name in both repositories
+        
+        Args:
+            repo1: First repository name
+            repo2: Second repository name
+            repo1_nodes: Nodes from first repository
+            repo2_nodes: Nodes from second repository
+            
+        Returns:
+            List of shared symbols with metadata
+        """
+        shared_symbols = []
+        
+        # Extract base names (without repo prefix)
+        repo1_names = {n.split(':', 1)[1] for n in repo1_nodes}
+        repo2_names = {n.split(':', 1)[1] for n in repo2_nodes}
+        
+        # Find intersection
+        common_names = repo1_names.intersection(repo2_names)
+        
+        for name in common_names:
+            repo1_node = f"{repo1}:{name}"
+            repo2_node = f"{repo2}:{name}"
+            
+            # Get node metadata
+            repo1_data = self.graph.nodes[repo1_node]
+            repo2_data = self.graph.nodes[repo2_node]
+            
+            # Check if they're the same type of symbol
+            if repo1_data.get('type') == repo2_data.get('type'):
+                shared_symbols.append({
+                    'name': name,
+                    'type': repo1_data.get('type', 'unknown'),
+                    'repo1_file': repo1_data.get('file'),
+                    'repo2_file': repo2_data.get('file')
+                })
+        
+        return shared_symbols
+    
+    def _find_api_connections(self, repo1: str, repo2: str,
+                             repo1_nodes: List[str], repo2_nodes: List[str]) -> List[Dict]:
+        """
+        Find potential API connections between repositories
+        
+        Args:
+            repo1: First repository name
+            repo2: Second repository name
+            repo1_nodes: Nodes from first repository
+            repo2_nodes: Nodes from second repository
+            
+        Returns:
+            List of potential API connections
+        """
+        api_connections = []
+        
+        # Look for nodes that could be APIs (classes, functions, etc.)
+        api_types = {'class', 'function', 'method', 'module'}
+        
+        repo1_apis = [n for n in repo1_nodes 
+                     if self.graph.nodes[n].get('type') in api_types]
+        repo2_apis = [n for n in repo2_nodes 
+                     if self.graph.nodes[n].get('type') in api_types]
+        
+        # For each API in repo1, find similar APIs in repo2
+        for api1 in repo1_apis:
+            api1_name = api1.split(':', 1)[1]
+            
+            for api2 in repo2_apis:
+                api2_name = api2.split(':', 1)[1]
+                
+                # Check for name similarity
+                if (api1_name.lower() in api2_name.lower() or 
+                    api2_name.lower() in api1_name.lower()):
+                    
+                    # Get node metadata
+                    api1_data = self.graph.nodes[api1]
+                    api2_data = self.graph.nodes[api2]
+                    
+                    api_connections.append({
+                        'repo1_api': api1_name,
+                        'repo2_api': api2_name,
+                        'type': api1_data.get('type', 'unknown'),
+                        'repo1_file': api1_data.get('file'),
+                        'repo2_file': api2_data.get('file'),
+                        'similarity': 'name_substring'
+                    })
+        
+        return api_connections
+    
+    def get_cross_repo_dependencies(self) -> Dict[str, Set[str]]:
+        """
+        Get dependencies between repositories
+        
+        Returns:
+            Dictionary mapping repository names to sets of dependent repositories
+        """
+        dependencies = {repo: set() for repo in self.repos}
+        
+        # Check for potential dependencies based on shared symbols
+        integration_points = self.find_integration_points()
+        
+        for point in integration_points:
+            repo1, repo2 = point['repos']
+            
+            # If there are shared symbols or API connections, consider them potentially dependent
+            if point['shared_symbols'] or point['api_connections']:
+                dependencies[repo1].add(repo2)
+                dependencies[repo2].add(repo1)
+        
+        return dependencies
+    
+    def visualize(self, output_file: str = "cross_repo_graph.png"):
+        """
+        Visualize the cross-repository graph
+        
+        Args:
+            output_file: Path to save the visualization
+        """
+        try:
+            import matplotlib.pyplot as plt
+            
+            # Create a simplified graph for visualization
+            vis_graph = nx.DiGraph()
+            
+            # Add nodes with repository as color
+            for node, data in self.graph.nodes(data=True):
+                repo = data.get('repo', 'unknown')
+                vis_graph.add_node(node, repo=repo)
+            
+            # Add edges
+            for src, dst in self.graph.edges():
+                vis_graph.add_edge(src, dst)
+            
+            # Set up colors by repository
+            repos = list(self.repos.keys())
+            colors = plt.cm.tab10(range(len(repos)))
+            color_map = {repo: colors[i] for i, repo in enumerate(repos)}
+            
+            # Get node colors
+            node_colors = [color_map[self.graph.nodes[n]['repo']] for n in vis_graph.nodes()]
+            
+            # Create the plot
+            plt.figure(figsize=(12, 10))
+            pos = nx.spring_layout(vis_graph, seed=42)
+            nx.draw_networkx(
+                vis_graph, 
+                pos=pos,
+                node_color=node_colors,
+                node_size=50,
+                with_labels=False,
+                arrows=True,
+                alpha=0.7
+            )
+            
+            # Add legend
+            for i, repo in enumerate(repos):
+                plt.scatter([], [], color=colors[i], label=repo)
+            plt.legend()
+            
+            plt.title("Cross-Repository Dependency Graph")
+            plt.axis('off')
+            plt.tight_layout()
+            plt.savefig(output_file, dpi=300)
+            plt.close()
+            
+            return True
+        except ImportError:
+            return False
