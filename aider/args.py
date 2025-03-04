@@ -649,6 +649,19 @@ def get_parser(default_config_files, git_root):
         ),
     )
     group.add_argument(
+        "--cross-repo",
+        action="store_true",
+        help="Enable cross-repository mode for working with multiple codebases",
+        default=False,
+    )
+    group.add_argument(
+        "--add-repo",
+        action="append",
+        metavar="NAME:PATH",
+        help="Add a repository with name and path (can be used multiple times)",
+        default=[],
+    )
+    group.add_argument(
         "--message-file",
         "-f",
         metavar="MESSAGE_FILE",
@@ -828,6 +841,27 @@ def get_parser(default_config_files, git_root):
         action="store_true",
         help="Install the tree_sitter_language_pack (experimental)",
         default=False,
+    )
+    
+    ##########
+    group = parser.add_argument_group("Cross-repository settings")
+    group.add_argument(
+        "--cross-repo-map-tokens",
+        type=int,
+        default=1024,
+        help="Number of tokens to use for cross-repository maps (default: 1024)",
+    )
+    group.add_argument(
+        "--cross-repo-context-tokens",
+        type=int,
+        default=4096,
+        help="Maximum tokens for cross-repository context (default: 4096)",
+    )
+    group.add_argument(
+        "--cross-repo-auto-adapt",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Enable/disable automatic code adaptation when transplanting between repositories (default: True)",
     )
 
     return parser
