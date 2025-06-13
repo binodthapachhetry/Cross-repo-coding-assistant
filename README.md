@@ -1,19 +1,47 @@
-
-<!-- Edit README.md, not index.md -->
-# Cross repository coding AI assistant
-
-## 1.	Cross-Codebase Context
-    •	Most AI coding assistants (e.g., GitHub Copilot, Aider, ChatGPT plugins, etc.) are typically bound to a single project at a time.
-    •	Your proposed system goes one step further: it indexes two (or more) distinct codebases and understands how their components might integrate.
-    •	This supports a use case that typical code assistants don’t address well: porting, reusing, or adapting code from one repository into another.
-
-## 2.	Documentation + Code Linking
-    •	Combining code and documentation from two separate projects ensures you have the necessary domain insights for each codebase.
-    •	This is crucial because blindly copying a function without context (library dependencies, environment configs, licensing constraints) can lead to misintegration or errors.
-    •	If your system also surfaces relevant doc snippets (e.g., “This function requires dependency X and config Y”), it provides more confidence in the reusability or adaptation steps.
-
-## 3.	Practical Developer Workflow
-    •	In real-world dev workflows, engineers often have to learn from existing code (in-house or open-source) and adapt those patterns.
-    •	A typical scenario: “We built feature X in a previous microservice. Let’s port the same logic into our new microservice.”
-    •	Another scenario: “We found an open-source library that does advanced image processing; can we integrate these pieces into our codebase with minimal friction?”
-    •	A cross-repo assistant that understands both codebases, relevant docs, and usage context would significantly speed up this process.
+# Aider — AI-Powered Cross-Repository Coding Assistant                                                                                                                                                                                         
+ **Aider** turns any Git repository into an ongoing conversation with a Large-Language Model.                                        
+ Request refactors, bug-fixes or explanations; Aider stages, commits and streams diffs back to you                                   
+ while preserving a clean history.                                                                                                   
+                                                                                                                                     
+ ## Key Features                                                                                                                     
+ • LLM-driven editing (whole-file, edit-block, udiff, etc.)                                                                          
+ • Git automation: auto-stage, commit, undo/redo, branch safety checks                                                               
+ • CLI, Streamlit GUI and optional voice input                                                                                       
+ • Cross-repository reasoning via `aider/cross_repo_graph.py`                                                                        
+ • 15-plus language support through tree-sitter  tags cache                                                                         
+ • Live file watcher surfacing AI TODO comments                                                                                      
+ • Analytics & benchmarking harness (SWE-Bench, custom grids)                                                                        
+                                                                                                                                     
+ ## Quick Start                                                                                                                      
+ ```bash                                                                                                                             
+ pip install aider                                                                                                                   
+ # run inside any git repo                                                                                                           
+ aider                                                                                                                               
+ ```                                                                                                                                 
+                                                                                                                                     
+ ## Example Session                                                                                                                  
+ ```text                                                                                                                             
+ > aider                                                                                                                             
+ Aider: Which files would you like to add?                                                                                           
+ You: src/sample.py                                                                                                                  
+ You: "Rename function `greet` to `say_hello` everywhere."                                                                           
+ Aider streams patch …                                                                                                               
+ ```                                                                                                                                 
+                                                                                                                                     
+ ## Architecture (High Level)                                                                                                        
+ ```                                                                                                                                 
+ ┌─ Input/Output (aider/io.py)                                                                                                       
+ │    ├── CLI / GUI / Voice                                                                                                          
+ │    └── Linter                                                                                                                     
+ ├─ Coders (aider/coders/*)      ← prompt templates & diff builders                                                                  
+ ├─ LLM Adapter (aider/llm.py)   ← wraps LiteLLM, cost tracking                                                                      
+ ├─ Repo Layer (aider/repo.py)   ← git plumbing, diff/patch, undo                                                                    
+ └─ Cross-Repo Graph (aider/cross_repo_graph.py)                                                                                     
+ ```                                                                                                                                 
+                                                                                                                                     
+ ## Contributing                                                                                                                     
+ PRs are welcome! Run `pytest` and `ruff` before submitting.                                                                         
+ See `CONVENTIONS.md` for the project’s coding protocol.                                                                             
+                                                                                                                                     
+ ## License                                                                                                                          
+ MIT © 2024 Aider Contributors  
